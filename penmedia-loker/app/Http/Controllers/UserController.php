@@ -11,29 +11,76 @@ use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    public function dashboard()
+    public function dashboard(Request $request)
     {
-        $featuredJobs = JobListing::with('company')
-                                  ->where('status', 'active')
-                                  ->latest()
-                                  ->take(6)
-                                  ->get();
+        $query = JobListing::with('company')->where('status', 'active');
         
-        $recentJobs = JobListing::with('company')
-                                ->where('status', 'active')
-                                ->latest()
-                                ->take(8)
-                                ->get();
+        // Filter berdasarkan pencarian
+        if ($request->filled('search')) {
+            $query->where('title', 'like', '%' . $request->search . '%');
+        }
         
-        return view('user.dashboard', compact('featuredJobs', 'recentJobs'));
+        if ($request->filled('location')) {
+            $query->where('location', 'like', '%' . $request->location . '%');
+        }
+        
+        if ($request->filled('job_type')) {
+            $query->where('job_type', $request->job_type);
+        }
+        
+        // Rekomendasi berdasarkan profil user
+        $recommendedJobs = collect();
+        if (Auth::check() && Auth::user()->jurusan) {
+            $recommendedJobs = JobListing::with('company')
+                ->where('status', 'active')
+                ->where(function($q) {
+                    $user = Auth::user();
+                    if ($user->jurusan) {
+                        $q->where('department', 'like', '%' . $user->jurusan . '%')
+                          ->orWhere('title', 'like', '%' . $user->jurusan . '%');
+                    }
+                    if ($user->tipe_kerja) {
+                        $q->orWhere('job_type', $user->tipe_kerja);
+                    }
+                })
+                ->latest()
+                ->take(6)
+                ->get();
+        }
+        
+        $featuredJobs = $query->latest()->take(6)->get();
+        $recentJobs = JobListing::with('company')->where('status', 'active')->latest()->take(8)->get();
+        
+        $favoriteCompanies = [];
+        if (Auth::check()) {
+            $favoriteCompanies = Auth::user()->favoriteCompanies()->take(4)->get();
+        }
+        
+        return view('user.dashboard', compact('featuredJobs', 'recentJobs', 'favoriteCompanies', 'recommendedJobs'));
     }
 
-    public function companies()
+    public function companies(Request $request)
     {
-        $companies = User::where('role', 'company')
-                        ->withCount(['jobListings as jobs_count'])
-                        ->orderBy('created_at', 'desc')
-                        ->get();
+        $query = User::where('role', 'company')->withCount(['jobListings as jobs_count']);
+        
+        // Filter pencarian
+        if ($request->filled('search')) {
+            $query->where(function($q) use ($request) {
+                $q->where('company_name', 'like', '%' . $request->search . '%')
+                  ->orWhere('name', 'like', '%' . $request->search . '%')
+                  ->orWhere('industry', 'like', '%' . $request->search . '%');
+            });
+        }
+        
+        if ($request->filled('industry')) {
+            $query->where('industry', $request->industry);
+        }
+        
+        if ($request->filled('size')) {
+            $query->where('employee_count', 'like', '%' . $request->size . '%');
+        }
+        
+        $companies = $query->orderBy('created_at', 'desc')->get();
         
         return view('user.companies', compact('companies'));
     }

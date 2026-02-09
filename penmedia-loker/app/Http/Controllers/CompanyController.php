@@ -127,7 +127,46 @@ class CompanyController extends Controller
             'status' => 'active'
         ]);
 
-        return redirect()->route('company.dashboard')->with('success', 'Lowongan kerja berhasil ditambahkan!');
+        return redirect()->route('company.lowongan')->with('success', 'Lowongan kerja berhasil ditambahkan!');
+    }
+
+    public function updateJob(Request $request, $id)
+    {
+        $job = JobListing::where('company_id', Auth::id())->findOrFail($id);
+        
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'department' => 'required|string|max:255',
+            'job_type' => 'required|string',
+            'work_location' => 'required|string',
+            'location' => 'required|string|max:255',
+            'education_level' => 'required|string',
+            'salary_min' => 'required|numeric',
+            'salary_max' => 'required|numeric',
+            'description' => 'required|string',
+            'requirements' => 'required|string',
+        ]);
+
+        $job->update([
+            'title' => $request->title,
+            'department' => $request->department,
+            'job_type' => $request->job_type,
+            'work_location' => $request->work_location,
+            'location' => $request->location,
+            'education_level' => $request->education_level,
+            'salary_min' => $request->salary_min,
+            'salary_max' => $request->salary_max,
+            'description' => $request->description,
+            'requirements' => $request->requirements,
+        ]);
+
+        return redirect()->route('company.lowongan')->with('success', 'Lowongan kerja berhasil diupdate!');
+    }
+
+    public function getJob($id)
+    {
+        $job = JobListing::where('company_id', Auth::id())->findOrFail($id);
+        return response()->json($job);
     }
 
     public function getApplication($id)
@@ -158,5 +197,33 @@ class CompanyController extends Controller
                         ->get();
         
         return view('company.kandidat', compact('applications'));
+    }
+
+    public function lowongan()
+    {
+        $jobs = JobListing::where('company_id', Auth::id())
+                          ->withCount('applications')
+                          ->orderBy('created_at', 'desc')
+                          ->get();
+        
+        return view('company.lowongan', compact('jobs'));
+    }
+
+    public function laporan()
+    {
+        $stats = [
+            'total_jobs' => JobListing::where('company_id', Auth::id())->count(),
+            'total_applicants' => \App\Models\JobApplication::whereHas('jobListing', function($query) {
+                $query->where('company_id', Auth::id());
+            })->count(),
+            'accepted' => \App\Models\JobApplication::whereHas('jobListing', function($query) {
+                $query->where('company_id', Auth::id());
+            })->where('status', 'accepted')->count(),
+            'rejected' => \App\Models\JobApplication::whereHas('jobListing', function($query) {
+                $query->where('company_id', Auth::id());
+            })->where('status', 'rejected')->count(),
+        ];
+        
+        return view('company.laporan', compact('stats'));
     }
 }
