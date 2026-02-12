@@ -180,6 +180,22 @@ class CompanyController extends Controller
         return response()->json($application);
     }
 
+    public function updateApplicationStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|in:pending,approved,cancel,masih_proses'
+        ]);
+
+        $application = \App\Models\JobApplication::whereHas('jobListing', function($query) {
+                            $query->where('company_id', Auth::id());
+                        })
+                        ->findOrFail($id);
+        
+        $application->update(['status' => $request->status]);
+        
+        return response()->json(['success' => true, 'message' => 'Status berhasil diupdate']);
+    }
+
     public function kandidat()
     {
         // Tandai semua aplikasi sebagai sudah dibaca ketika halaman kandidat dibuka
